@@ -1,12 +1,18 @@
 from __future__ import annotations
+
+import math
+
 import numpy as np
 from numpy.linalg import inv, det, slogdet
+
+NUM_SAMPLES = 1000
 
 
 class UnivariateGaussian:
     """
     Class for univariate Gaussian Distribution Estimator
     """
+
     def __init__(self, biased_var: bool = False) -> UnivariateGaussian:
         """
         Estimator for univariate Gaussian mean and variance parameters
@@ -51,8 +57,13 @@ class UnivariateGaussian:
         Sets `self.mu_`, `self.var_` attributes according to calculated estimation (where
         estimator is either biased or unbiased). Then sets `self.fitted_` attribute to `True`
         """
-        raise NotImplementedError()
-
+        division_factor = (len(X) - 1)
+        if self.biased_:
+            division_factor += 1
+        self.mu_ = X.mean()
+        samples_minus_expectation = X - self.mu_
+        samples_minus_expectation_square = samples_minus_expectation * samples_minus_expectation
+        self.var_ = samples_minus_expectation_square.sum() / division_factor
         self.fitted_ = True
         return self
 
@@ -76,7 +87,10 @@ class UnivariateGaussian:
         """
         if not self.fitted_:
             raise ValueError("Estimator must first be fitted before calling `pdf` function")
-        raise NotImplementedError()
+        temp = 1 / (2 * self.var_) * ((X - self.mu_) * (X - self.mu_))
+        factor = (1 / math.sqrt(2 * np.pi * self.var_))
+        ret = factor * np.exp(-temp)
+        return ret
 
     @staticmethod
     def log_likelihood(mu: float, sigma: float, X: np.ndarray) -> float:
@@ -97,13 +111,18 @@ class UnivariateGaussian:
         log_likelihood: float
             log-likelihood calculated
         """
-        raise NotImplementedError()
+        # the log_likelihood is -m/2 * log(2pi*sigma) - (1/(2*sigma))*(sum(xi - mu)^2)
+        first_elem = (X.shape[0] / 2) * math.log(2 * math.pi * sigma)
+        X_minus_mu_square = (X - mu) * (X - mu)
+        second_elem = (1 / (2 * sigma)) * X_minus_mu_square.sum()
+        return - first_elem - second_elem
 
 
 class MultivariateGaussian:
     """
     Class for multivariate Gaussian Distribution Estimator
     """
+
     def __init__(self):
         """
         Initialize an instance of multivariate Gaussian estimator
@@ -143,8 +162,9 @@ class MultivariateGaussian:
         Sets `self.mu_`, `self.cov_` attributes according to calculated estimation.
         Then sets `self.fitted_` attribute to `True`
         """
-        raise NotImplementedError()
-
+        self.mu_ = np.mean(X, axis=0)
+        centered = X - self.mu_
+        self.cov_ = (1 / (X.shape[0] - 1)) * (centered.T @ centered)
         self.fitted_ = True
         return self
 
@@ -168,7 +188,14 @@ class MultivariateGaussian:
         """
         if not self.fitted_:
             raise ValueError("Estimator must first be fitted before calling `pdf` function")
-        raise NotImplementedError()
+        random_vectors_dimension = X.shape[1]
+        cov_det = np.linalg.det(self.cov_)
+        factor = 1 / np.sqrt(math.pow(2 * math.pi, random_vectors_dimension) * cov_det)
+        X_minus_mu = X - self.mu_
+        inner_expression = (1 / 2) * np.diag(
+            X_minus_mu @ np.linalg.inv(self.cov_) @ X_minus_mu.transpose())
+        pdf_exp_part = np.exp(-inner_expression)
+        return factor * pdf_exp_part
 
     @staticmethod
     def log_likelihood(mu: np.ndarray, cov: np.ndarray, X: np.ndarray) -> float:
@@ -189,4 +216,12 @@ class MultivariateGaussian:
         log_likelihood: float
             log-likelihood calculated over all input data and under given parameters of Gaussian
         """
-        raise NotImplementedError()
+        vectors_dimension = X.shape[1]
+        cov_det = np.linalg.det(cov)
+        num_samples = X.shape[0]
+        X_minus_mu = X - mu
+        first_part = (num_samples / 2) * np.log(math.pow(2 * math.pi, vectors_dimension))
+        second_part = (num_samples / 2) * math.log(cov_det)
+        third_part = (1 / 2) * np.trace(
+            X_minus_mu @ np.linalg.inv(cov) @ X_minus_mu.transpose())
+        return - first_part - second_part - third_part
